@@ -63,6 +63,17 @@ if 'initialized' not in st.session_state:
     # Initialize GitHub integration if available
     if GITHUB_AVAILABLE:
         init_github_integration()
+
+
+# Authentication check
+if not auth.authenticate():
+    # If not authenticated, stop here
+    st.stop()
+
+# Display session info and logout button
+auth.show_session_info()
+auth.add_logout_button()
+
 # Add this to your app.py file, in the sidebar section where you handle GitHub integration
 
 # After initializing GitHub integration
@@ -118,16 +129,6 @@ if GITHUB_AVAILABLE and st.session_state.use_github:
                 st.session_state.last_save = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             else:
                 st.error("❌ Failed to save initial data to GitHub")
-
-# Authentication check
-if not auth.authenticate():
-    # If not authenticated, stop here
-    st.stop()
-
-# Display session info and logout button
-auth.show_session_info()
-auth.add_logout_button()
-
 
 # Sidebar - Settings and Filters
 with st.sidebar:
