@@ -529,7 +529,6 @@ def show_room_status(occupant_manager, room_manager):
     else:
         st.info("No room status data available")
 
-
 def show_room_assignment(occupant_manager, room_manager):
     """Show room assignment interface"""
     st.subheader("Room Assignment Interface")
@@ -572,8 +571,9 @@ def show_room_assignment(occupant_manager, room_manager):
                 )
                 
                 # Also exclude STORAGE records
-                not_storage_mask = ~people_df['Name'].str.contains('STORAGE', case=False, na=False)
-                not_placeholder_mask = ~people_df['Name'].str.contains('PLACEHOLDER', case=False, na=False)
+                # Fix: Add proper handling for non-string values in 'Name' column
+                not_storage_mask = ~people_df['Name'].astype(str).str.contains('STORAGE', case=False, na=False)
+                not_placeholder_mask = ~people_df['Name'].astype(str).str.contains('PLACEHOLDER', case=False, na=False)
                 eligible_mask = not_storage_mask & not_placeholder_mask
                 
                 # Filter for assignment-eligible people
@@ -731,9 +731,13 @@ def show_room_assignment(occupant_manager, room_manager):
                                 (current_df['Building'] == building) & 
                                 (current_df['Office'] == office)
                             ]
+                            
+                            # Fix: Proper handling for the Name column
                             for _, occupant in current_occupants.iterrows():
-                                if "STORAGE" not in occupant['Name'] and "PLACEHOLDER" not in occupant['Name']:
-                                    room_occupants.append((occupant['Name'], "Current"))
+                                # Convert Name to string to avoid issues with float values
+                                name_str = str(occupant.get('Name', ''))
+                                if "STORAGE" not in name_str and "PLACEHOLDER" not in name_str:
+                                    room_occupants.append((name_str, "Current"))
                             
                             # Add upcoming occupants
                             upcoming_df = occupant_manager.get_upcoming_occupants()
@@ -741,9 +745,12 @@ def show_room_assignment(occupant_manager, room_manager):
                                 (upcoming_df['Building'] == building) & 
                                 (upcoming_df['Office'] == office)
                             ]
+                            
+                            # Fix: Similar handling for upcoming occupants
                             for _, occupant in upcoming_occupants.iterrows():
-                                if "STORAGE" not in occupant['Name'] and "PLACEHOLDER" not in occupant['Name']:
-                                    room_occupants.append((occupant['Name'], "Upcoming"))
+                                name_str = str(occupant.get('Name', ''))
+                                if "STORAGE" not in name_str and "PLACEHOLDER" not in name_str:
+                                    room_occupants.append((name_str, "Upcoming"))
                             
                             with cols[col]:
                                 # Create room card
@@ -757,10 +764,11 @@ def show_room_assignment(occupant_manager, room_manager):
                                 
                                 # Show room occupants (both current and upcoming)
                                 if room_occupants:
-                                    st.markdown("**Current occupants:**")
-                                    for occupant_name, occupant_status in room_occupants:
-                                        if occupant_status == "Current":
-                                            st.markdown(f"- {occupant_name}")
+                                    current_occupants_list = [name for name, status in room_occupants if status == "Current"]
+                                    if current_occupants_list:
+                                        st.markdown("**Current occupants:**")
+                                        for name in current_occupants_list:
+                                            st.markdown(f"- {name}")
                                     
                                     # Show upcoming occupants if any
                                     upcoming_in_room = [name for name, status in room_occupants if status == "Upcoming"]
@@ -772,7 +780,7 @@ def show_room_assignment(occupant_manager, room_manager):
                                 # Show assign button
                                 if selected_person and not is_storage:
                                     # Add a unique key for each button based on room and person
-                                    btn_key = f"assign_{building}_{office}_{selected_person.replace(' ', '_')}"
+                                    btn_key = f"assign_{building}_{office}_{str(selected_person).replace(' ', '_')}"
                                     if st.button(f"Assign to Room {office}", key=btn_key):
                                         # Pass the status label
                                         success = occupant_manager.assign_occupant_to_room(

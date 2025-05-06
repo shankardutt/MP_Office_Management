@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from datetime import datetime
 
 import config
 
@@ -306,7 +307,7 @@ def style_dataframe(df, column_name):
     return df
 
 
-def save_action(occupant_manager, room_manager, file_path):
+def save_action(occupant_manager, room_manager, file_path, use_github=False):
     """Execute save action with validation"""
     from data_manager import save_data
     
@@ -340,15 +341,24 @@ def save_action(occupant_manager, room_manager, file_path):
             upcoming_df, 
             past_df,
             file_path,
-            room_manager.room_capacities
+            room_manager.room_capacities,
+            use_github=use_github
         )
         
         if success:
             # Update last_save timestamp
             from datetime import datetime
             st.session_state.last_save = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            return True, "Data saved successfully!"
+            
+            # If GitHub was used, add that to the success message
+            if use_github:
+                return True, "Data saved successfully to local file and GitHub!"
+            else:
+                return True, "Data saved successfully to local file!"
         else:
-            return False, "Error saving data. Please check the console for details."
+            if use_github:
+                return False, "Error saving data to local file or GitHub. Please check the console for details."
+            else:
+                return False, "Error saving data. Please check the console for details."
     else:
         return False, validation_messages

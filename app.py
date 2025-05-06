@@ -6,12 +6,20 @@ import os
 import streamlit as st
 from datetime import datetime, timedelta
 import pandas as pd
+import io
 
 # Import configuration and modules
 import config
 import auth
-from data_manager import load_data, save_data, create_system_manager
+from data_manager import load_data, save_data, create_system_manager, get_data_as_excel
 from utils import apply_custom_css
+
+# Import GitHub integration if available
+try:
+    from github_integration import init_github_integration, show_github_settings
+    GITHUB_AVAILABLE = True
+except ImportError:
+    GITHUB_AVAILABLE = False
 
 
 # Set page configuration
@@ -50,6 +58,11 @@ if 'initialized' not in st.session_state:
     st.session_state.filter_building = 'All'
     st.session_state.last_save = None
     st.session_state.ignore_warnings = False
+    st.session_state.use_github = False
+    
+    # Initialize GitHub integration if available
+    if GITHUB_AVAILABLE:
+        init_github_integration()
 
 
 # Authentication check
@@ -66,6 +79,15 @@ auth.add_logout_button()
 with st.sidebar:
     st.image(config.SIDEBAR_ICON, width=100)
     st.title("Room Allocation System")
+    
+    # Show GitHub settings if available
+    if GITHUB_AVAILABLE:
+        show_github_settings()
+        st.session_state.use_github = st.checkbox(
+            "🔄 Use GitHub for data storage",
+            value=st.session_state.use_github,
+            help="Enable to save and load data from GitHub"
+        )
     
     # File Upload/Selection
     st.header("Data Source")
@@ -89,7 +111,10 @@ with st.sidebar:
     
     # Create managers if not in session state
     if 'occupant_manager' not in st.session_state or 'room_manager' not in st.session_state:
-        occupant_manager, room_manager = create_system_manager(st.session_state.file_path)
+        occupant_manager, room_manager = create_system_manager(
+            st.session_state.file_path, 
+            st.session_state.use_github
+        )
         st.session_state.occupant_manager = occupant_manager
         st.session_state.room_manager = room_manager
     
@@ -120,7 +145,12 @@ with st.sidebar:
         
         # Execute save action
         from utils import save_action
-        success, message = save_action(occupant_manager, room_manager, st.session_state.file_path)
+        success, message = save_action(
+            occupant_manager, 
+            room_manager, 
+            st.session_state.file_path,
+            use_github=st.session_state.use_github
+        )
         
         if success:
             st.success(message)
@@ -132,22 +162,28 @@ with st.sidebar:
             else:
                 st.error(message)
     
-    # Add data backup button
+    # Add data backup and download button
     if st.button("📦 Create Backup", key="create_backup_btn"):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = f'{config.BACKUP_DIR}/MP_Office_Allocation_{timestamp}.xlsx'
-        
-        current_df = occupant_manager.get_current_occupants()
-        upcoming_df = occupant_manager.get_upcoming_occupants()
-        past_df = occupant_manager.get_past_occupants()
+        backup_filename = f'MP_Office_Allocation_{timestamp}.xlsx'
         
         try:
-            with pd.ExcelWriter(backup_path) as writer:
-                current_df.to_excel(writer, sheet_name='Current', index=False)
-                upcoming_df.to_excel(writer, sheet_name='Upcoming', index=False)
-                past_df.to_excel(writer, sheet_name='Past', index=False)
+            # Get Excel data as bytes
+            excel_data = get_data_as_excel(occupant_manager, room_manager)
             
-            st.success(f"Backup created: {backup_path}")
+            if excel_data:
+                # Offer the file for download
+                st.download_button(
+                    label="📥 Download Backup File",
+                    data=excel_data,
+                    file_name=backup_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="download_backup_btn"
+                )
+                
+                st.success(f"Backup '{backup_filename}' ready for download")
+            else:
+                st.error("Error creating backup")
         except Exception as e:
             st.error(f"Error creating backup: {e}")
     

@@ -6,15 +6,30 @@ import os
 import json
 import shutil
 import pandas as pd
+import io
 from datetime import datetime
 
 import config
 from models import OccupantManager, RoomManager
 
+# Import GitHub integration if available
+try:
+    from github_integration import save_to_github, load_from_github
+    GITHUB_AVAILABLE = True
+except ImportError:
+    GITHUB_AVAILABLE = False
 
-def load_room_capacities():
-    """Load room capacities from JSON file"""
+
+def load_room_capacities(use_github=False):
+    """Load room capacities from JSON file or GitHub"""
     try:
+        # Try to load from GitHub first if enabled
+        if use_github and GITHUB_AVAILABLE:
+            content = load_from_github(os.path.basename(config.CAPACITY_CONFIG_PATH))
+            if content:
+                return json.loads(content.decode('utf-8'))
+        
+        # Otherwise load from local file
         if os.path.exists(config.CAPACITY_CONFIG_PATH):
             with open(config.CAPACITY_CONFIG_PATH, 'r') as f:
                 capacities = json.load(f)
@@ -25,25 +40,52 @@ def load_room_capacities():
         return {}
 
 
-def save_room_capacities(capacities):
-    """Save room capacities to JSON file"""
+def save_room_capacities(capacities, use_github=False):
+    """Save room capacities to JSON file and optionally to GitHub"""
     try:
+        # Format JSON with indentation for readability
+        json_content = json.dumps(capacities, indent=2)
+        
+        # Save locally
         with open(config.CAPACITY_CONFIG_PATH, 'w') as f:
-            json.dump(capacities, f)
+            f.write(json_content)
+        
+        # Save to GitHub if enabled
+        if use_github and GITHUB_AVAILABLE:
+            success, message = save_to_github(
+                os.path.basename(config.CAPACITY_CONFIG_PATH),
+                json_content,
+                f"Update room capacities - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            if not success:
+                print(f"GitHub save warning: {message}")
+        
         return True
     except Exception as e:
         print(f"Error saving room capacities: {e}")
         return False
 
 
-def load_data(file_path=config.DEFAULT_EXCEL_PATH):
+def load_data(file_path=config.DEFAULT_EXCEL_PATH, use_github=False):
     """
-    Load data from Excel file
+    Load data from Excel file or GitHub
     Returns: (current_df, upcoming_df, past_df)
     """
     try:
-        # Load all sheets
-        xls = pd.ExcelFile(file_path)
+        # Try to load from GitHub first if enabled
+        if use_github and GITHUB_AVAILABLE:
+            content = load_from_github(os.path.basename(file_path))
+            if content:
+                # Use BytesIO to create a file-like object from the content
+                excel_data = io.BytesIO(content)
+                xls = pd.ExcelFile(excel_data)
+            else:
+                # Fall back to local file if not found on GitHub
+                xls = pd.ExcelFile(file_path)
+        else:
+            # Load from local file
+            xls = pd.ExcelFile(file_path)
+            
         sheet_names = xls.sheet_names
         
         # Identify sheets
@@ -52,9 +94,21 @@ def load_data(file_path=config.DEFAULT_EXCEL_PATH):
         past_sheet = next((s for s in sheet_names if 'past' in s.lower()), None)
         
         # Load sheets into dataframes
-        current_df = pd.read_excel(file_path, sheet_name=current_sheet) if current_sheet else pd.DataFrame()
-        upcoming_df = pd.read_excel(file_path, sheet_name=upcoming_sheet) if upcoming_sheet else pd.DataFrame()
-        past_df = pd.read_excel(file_path, sheet_name=past_sheet) if past_sheet else pd.DataFrame()
+        if use_github and GITHUB_AVAILABLE and 'excel_data' in locals():
+            # If we loaded from GitHub, use the BytesIO object
+            current_df = pd.read_excel(excel_data, sheet_name=current_sheet) if current_sheet else pd.DataFrame()
+            
+            # We need to reset the position in the BytesIO object for each read
+            excel_data.seek(0)
+            upcoming_df = pd.read_excel(excel_data, sheet_name=upcoming_sheet) if upcoming_sheet else pd.DataFrame()
+            
+            excel_data.seek(0)
+            past_df = pd.read_excel(excel_data, sheet_name=past_sheet) if past_sheet else pd.DataFrame()
+        else:
+            # Otherwise use the file path
+            current_df = pd.read_excel(file_path, sheet_name=current_sheet) if current_sheet else pd.DataFrame()
+            upcoming_df = pd.read_excel(file_path, sheet_name=upcoming_sheet) if upcoming_sheet else pd.DataFrame()
+            past_df = pd.read_excel(file_path, sheet_name=past_sheet) if past_sheet else pd.DataFrame()
         
         # Clean column names by stripping whitespace
         for df in [current_df, upcoming_df, past_df]:
@@ -94,10 +148,10 @@ def load_data(file_path=config.DEFAULT_EXCEL_PATH):
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 
-def save_data(current_df, upcoming_df, past_df, file_path=config.DEFAULT_EXCEL_PATH, room_capacities=None):
-    """Save data to Excel file and optionally save room capacities"""
+def save_data(current_df, upcoming_df, past_df, file_path=config.DEFAULT_EXCEL_PATH, room_capacities=None, use_github=False):
+    """Save data to Excel file and optionally to GitHub"""
     try:
-        # Create backup
+        # Create a local backup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = f'{config.BACKUP_DIR}/MP_Office_Allocation_{timestamp}.xlsx'
         
@@ -118,15 +172,38 @@ def save_data(current_df, upcoming_df, past_df, file_path=config.DEFAULT_EXCEL_P
                 if 'Office' in df.columns:
                     df['Office'] = df['Office'].astype(str)
         
-        # Save the modified data
+        # Save the modified data locally
         with pd.ExcelWriter(file_path) as writer:
             current_df.to_excel(writer, sheet_name='Current', index=False)
             upcoming_df.to_excel(writer, sheet_name='Upcoming', index=False)
             past_df.to_excel(writer, sheet_name='Past', index=False)
         
+        # Save to GitHub if enabled
+        if use_github and GITHUB_AVAILABLE:
+            # Create Excel in memory
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                current_df.to_excel(writer, sheet_name='Current', index=False)
+                upcoming_df.to_excel(writer, sheet_name='Upcoming', index=False)
+                past_df.to_excel(writer, sheet_name='Past', index=False)
+            
+            # Get the binary content
+            excel_buffer.seek(0)
+            excel_content = excel_buffer.getvalue()
+            
+            # Save to GitHub
+            success, message = save_to_github(
+                os.path.basename(file_path),
+                excel_content,
+                f"Update office allocation data - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            
+            if not success:
+                print(f"GitHub save warning: {message}")
+        
         # Save room capacities if provided
         if room_capacities is not None:
-            save_room_capacities(room_capacities)
+            save_room_capacities(room_capacities, use_github)
         
         return True
     
@@ -166,23 +243,47 @@ def initialize_room_capacities(current_df):
     return {}
 
 
-def create_system_manager(file_path=config.DEFAULT_EXCEL_PATH):
-    """Create system manager objects from file"""
+def create_system_manager(file_path=config.DEFAULT_EXCEL_PATH, use_github=False):
+    """Create system manager objects from file or GitHub"""
     # Load data
-    current_df, upcoming_df, past_df = load_data(file_path)
+    current_df, upcoming_df, past_df = load_data(file_path, use_github)
     
     # Create occupant manager
     occupant_manager = OccupantManager(current_df, upcoming_df, past_df)
     
     # Load room capacities
-    room_capacities = load_room_capacities()
+    room_capacities = load_room_capacities(use_github)
     
     # Initialize capacities if empty
     if not room_capacities:
         room_capacities = initialize_room_capacities(current_df)
-        save_room_capacities(room_capacities)
+        save_room_capacities(room_capacities, use_github)
     
     # Create room manager
     room_manager = RoomManager(occupant_manager, room_capacities)
     
     return occupant_manager, room_manager
+
+
+def get_data_as_excel(occupant_manager, room_manager):
+    """Get the current data as Excel file content (bytes)"""
+    try:
+        # Get current dataframes
+        current_df = occupant_manager.get_current_occupants()
+        upcoming_df = occupant_manager.get_upcoming_occupants()
+        past_df = occupant_manager.get_past_occupants()
+        
+        # Create Excel in memory
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            current_df.to_excel(writer, sheet_name='Current', index=False)
+            upcoming_df.to_excel(writer, sheet_name='Upcoming', index=False)
+            past_df.to_excel(writer, sheet_name='Past', index=False)
+        
+        # Get the binary content
+        excel_buffer.seek(0)
+        return excel_buffer.getvalue()
+    
+    except Exception as e:
+        print(f"Error creating Excel data: {e}")
+        return None
