@@ -195,29 +195,29 @@ def show_github_settings():
                 f"({github_secrets['branch']} branch)"
             )
             
-            # Provide instructions for modifying secrets
-            with st.expander("How to change GitHub settings"):
-                st.write("""
-                To modify GitHub settings:
-                
-                **For local development:**
-                1. Create or edit `.streamlit/secrets.toml` file
-                2. Update the GitHub credentials there
-                
-                **For Streamlit Cloud:**
-                1. Go to your app dashboard
-                2. Navigate to 'Advanced Settings' → 'Secrets'
-                3. Update the GitHub credentials there
-                """)
-                
-                st.code("""
+            # Instead of using a nested expander, just show the instructions directly
+            st.subheader("How to change GitHub settings")
+            st.write("""
+            To modify GitHub settings:
+            
+            **For local development:**
+            1. Create or edit `.streamlit/secrets.toml` file
+            2. Update the GitHub credentials there
+            
+            **For Streamlit Cloud:**
+            1. Go to your app dashboard
+            2. Navigate to 'Advanced Settings' → 'Secrets'
+            3. Update the GitHub credentials there
+            """)
+            
+            st.code("""
 # Example secrets.toml format
 [github]
 token = "your_github_token"
 owner = "your_github_username"
 repo = "your_repository_name"
 branch = "main"
-                """, language="toml")
+            """, language="toml")
         else:
             st.warning("GitHub credentials not found in Streamlit Secrets")
             st.write("Configure GitHub integration for persistent storage:")
@@ -248,29 +248,29 @@ branch = "main"
                 help="Branch to save to (usually 'main' or 'master')"
             )
             
-            # Show instructions for setting up secrets
-            with st.expander("How to set up Streamlit Secrets"):
-                st.write("""
-                For permanent configuration, set up Streamlit Secrets:
-                
-                **For local development:**
-                1. Create `.streamlit/secrets.toml` in your project directory
-                2. Add GitHub credentials as shown in the example below
-                
-                **For Streamlit Cloud:**
-                1. Go to your app dashboard
-                2. Navigate to 'Advanced Settings' → 'Secrets'
-                3. Add GitHub credentials in the same format
-                """)
-                
-                st.code("""
-                    # Add this to your secrets.toml file
-                    [github]
-                    token = "your_github_token"
-                    owner = "your_github_username"
-                    repo = "your_repository_name"
-                    branch = "main"
-                """, language="toml")
+            # Show instructions for setting up secrets - Avoiding nested expander
+            st.subheader("How to set up Streamlit Secrets")
+            st.write("""
+            For permanent configuration, set up Streamlit Secrets:
+            
+            **For local development:**
+            1. Create `.streamlit/secrets.toml` in your project directory
+            2. Add GitHub credentials as shown in the example below
+            
+            **For Streamlit Cloud:**
+            1. Go to your app dashboard
+            2. Navigate to 'Advanced Settings' → 'Secrets'
+            3. Add GitHub credentials in the same format
+            """)
+            
+            st.code("""
+# Add this to your secrets.toml file
+[github]
+token = "your_github_token"
+owner = "your_github_username"
+repo = "your_repository_name"
+branch = "main"
+            """, language="toml")
         
         # Test connection button
         if st.button("Test GitHub Connection"):
