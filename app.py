@@ -63,7 +63,61 @@ if 'initialized' not in st.session_state:
     # Initialize GitHub integration if available
     if GITHUB_AVAILABLE:
         init_github_integration()
+# Add this to your app.py file, in the sidebar section where you handle GitHub integration
 
+# After initializing GitHub integration
+if GITHUB_AVAILABLE:
+    show_github_settings()
+    st.session_state.use_github = st.checkbox(
+        "🔄 Use GitHub for data storage",
+        value=st.session_state.use_github,
+        help="Enable to save and load data from GitHub"
+    )
+    
+    # Add verification option
+    if st.session_state.use_github and st.button("🔍 Verify GitHub Setup"):
+        from github_verification import verify_github_setup
+        
+        with st.spinner("Verifying GitHub setup..."):
+            status, message = verify_github_setup(
+                st.session_state.occupant_manager,
+                st.session_state.room_manager
+            )
+            
+            if status:
+                st.success("✅ GitHub integration verified successfully!")
+                st.info(message)
+            else:
+                st.error(f"❌ GitHub verification failed: {message}")
+
+# After the GitHub verification, add a button to force initial save
+if GITHUB_AVAILABLE and st.session_state.use_github:
+    if st.button("📤 Save Initial Data to GitHub"):
+        with st.spinner("Saving initial data to GitHub..."):
+            # Get current dataframes
+            current_df = st.session_state.occupant_manager.get_current_occupants()
+            upcoming_df = st.session_state.occupant_manager.get_upcoming_occupants()
+            past_df = st.session_state.occupant_manager.get_past_occupants()
+            room_capacities = st.session_state.room_manager.room_capacities
+            
+            # Save data to GitHub
+            from data_manager import save_data
+            success = save_data(
+                current_df,
+                upcoming_df,
+                past_df,
+                st.session_state.file_path,
+                room_capacities,
+                use_github=True
+            )
+            
+            if success:
+                st.success("✅ Initial data saved to GitHub successfully!")
+                # Update last_save timestamp
+                from datetime import datetime
+                st.session_state.last_save = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                st.error("❌ Failed to save initial data to GitHub")
 
 # Authentication check
 if not auth.authenticate():
