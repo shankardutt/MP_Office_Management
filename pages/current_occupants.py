@@ -56,7 +56,7 @@ def show_current_occupants(occupant_manager, room_manager):
                 "Building": st.column_config.SelectboxColumn(
                     "Building",
                     options=occupant_manager.get_unique_buildings(),
-                    required=True
+                    required=False  # Changed from required=True
                 ),
                 "Email address": st.column_config.TextColumn(
                     "Email address",
@@ -65,7 +65,7 @@ def show_current_occupants(occupant_manager, room_manager):
                 "Office": st.column_config.SelectboxColumn(
                     "Office",
                     options=occupant_manager.get_unique_offices(),
-                    required=True
+                    required=False  # Changed from required=True
                 ),
                 "Position": st.column_config.TextColumn(
                     "Position",
@@ -89,6 +89,27 @@ def show_current_occupants(occupant_manager, room_manager):
                 
                 st.success("Changes applied! Remember to click 'Save Changes' in the sidebar to save them permanently.")
                 st.rerun()
+                
+        # Add delete functionality after the data editor but before the form
+        st.markdown("### Delete Occupants")
+        st.write("Select an occupant to delete:")
+        
+        delete_cols = st.columns(3)
+        for i, (_, occupant) in enumerate(filtered_df.iterrows()):
+            col_idx = i % 3
+            with delete_cols[col_idx]:
+                occupant_name = occupant['Name']
+                # Skip STORAGE and PLACEHOLDER entries
+                if 'STORAGE' in occupant_name or 'PLACEHOLDER' in occupant_name:
+                    continue
+                    
+                if st.button(f"Delete {occupant_name}", key=f"delete_current_{i}"):
+                    # Delete the occupant
+                    occupant_manager.delete_occupant(occupant_name, 'Current')
+                    # Update room occupancy
+                    room_manager.update_occupancy()
+                    st.success(f"Deleted {occupant_name}. Remember to save changes!")
+                    st.rerun()
     else:
         st.info("No current occupants found with the selected filters")
     
@@ -103,12 +124,17 @@ def show_current_occupants(occupant_manager, room_manager):
             new_name = st.text_input("Name", placeholder="e.g., Smith, John Dr")
             new_email = st.text_input("Email", placeholder="e.g., john.smith@anu.edu.au")
             new_position = st.text_input("Position", placeholder="e.g., Professor")
+            # Define the status here - was missing before
+            new_status = "Current"  # Default status for this page
         
         with col2:
             # Get room occupancy for intelligent room assignment
             room_occupancy = room_manager.get_occupancy_data()
             
-            if not room_occupancy.empty:
+            # Add an option to leave room unassigned
+            assign_room = st.checkbox("Assign to a room now", value=True, key="assign_room_current")
+            
+            if assign_room and not room_occupancy.empty:
                 # Add formatted room labels with capacity info
                 room_options = []
                 
@@ -156,23 +182,18 @@ def show_current_occupants(occupant_manager, room_manager):
                 else:
                     new_office = st.text_input("Office", placeholder="e.g., 3.17")
                     new_building = st.selectbox("Building", 
-                                               occupant_manager.get_unique_buildings(),
-                                               key="new_occupant_building_select")
+                                            occupant_manager.get_unique_buildings(),
+                                            key="new_occupant_building_select")
             else:
-                new_office = st.text_input("Office", placeholder="e.g., 3.17")
-                new_building = st.selectbox("Building", 
-                                           occupant_manager.get_unique_buildings(),
-                                           key="new_occupant_building_select_fallback")
-            
-            new_status = st.selectbox("Status", 
-                                     ["Current", "Upcoming", "Past"], 
-                                     index=0,
-                                     key="new_occupant_status_select")
+                # Set empty values if not assigning a room
+                new_building = ""
+                new_office = ""
         
         submitted = st.form_submit_button("Add Occupant")
         
         if submitted:
-            if new_name and new_office and new_building:
+            # Modified validation - only require name
+            if new_name:
                 # Create new row
                 new_row = {
                     'Name': new_name,
@@ -192,4 +213,4 @@ def show_current_occupants(occupant_manager, room_manager):
                 st.success(f"Added {new_name} to {new_status} occupants. Remember to save changes!")
                 st.rerun()
             else:
-                st.error("Name, Office, and Building are required fields")
+                st.error("Name is required")  # Changed error message to only require Name

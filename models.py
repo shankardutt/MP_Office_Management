@@ -195,6 +195,17 @@ class OccupantManager:
             
         return True
     
+    def delete_occupant(self, name, status='Current'):
+        """Delete an occupant from the appropriate dataframe"""
+        if status == 'Current':
+            self.current_df = self.current_df[self.current_df['Name'] != name]
+        elif status == 'Upcoming':
+            self.upcoming_df = self.upcoming_df[self.upcoming_df['Name'] != name]
+        elif status == 'Past':
+            self.past_df = self.past_df[self.past_df['Name'] != name]
+            
+        return True
+    
     def update_current_occupants(self, updated_df):
         """Update the current occupants dataframe and handle status changes"""
         # Track which occupants need to be moved between dataframes

@@ -48,12 +48,12 @@ def show_upcoming_occupants(occupant_manager, room_manager):
                 "Building": st.column_config.SelectboxColumn(
                     "Building",
                     options=occupant_manager.get_unique_buildings(),
-                    required=True
+                    required=False  # Changed from required=True
                 ),
                 "Office": st.column_config.SelectboxColumn(
                     "Office",
                     options=occupant_manager.get_unique_offices(),
-                    required=True
+                    required=False  # Changed from required=True
                 ),
                 "Planned Arrival": st.column_config.DateColumn(
                     "Planned Arrival",
@@ -78,6 +78,23 @@ def show_upcoming_occupants(occupant_manager, room_manager):
                 
                 st.success("Changes applied! Remember to click 'Save Changes' in the sidebar to save them permanently.")
                 st.rerun()
+        
+        # Add delete functionality
+        st.markdown("### Delete Occupants")
+        st.write("Select an occupant to delete:")
+        
+        delete_cols = st.columns(3)
+        for i, (_, occupant) in enumerate(filtered_df.iterrows()):
+            col_idx = i % 3
+            with delete_cols[col_idx]:
+                occupant_name = occupant['Name']
+                if st.button(f"Delete {occupant_name}", key=f"delete_upcoming_{i}"):
+                    # Delete the occupant
+                    occupant_manager.delete_occupant(occupant_name, 'Upcoming')
+                    # Update room occupancy
+                    room_manager.update_occupancy()
+                    st.success(f"Deleted {occupant_name}. Remember to save changes!")
+                    st.rerun()
     else:
         st.info("No upcoming occupants found with the selected filters")
     
@@ -98,7 +115,10 @@ def show_upcoming_occupants(occupant_manager, room_manager):
             # Get room occupancy data for intelligent room suggestion
             room_occupancy = room_manager.get_occupancy_data()
             
-            if not room_occupancy.empty:
+            # Add an option to leave room unassigned
+            assign_room = st.checkbox("Assign to a room now", value=True, key="assign_room_upcoming")
+            
+            if assign_room and not room_occupancy.empty:
                 # Add rooms with availability info
                 room_options = []
                 
@@ -154,14 +174,14 @@ def show_upcoming_occupants(occupant_manager, room_manager):
                                               occupant_manager.get_unique_buildings(),
                                               key="upcoming_new_building_select")
             else:
-                new_office = st.text_input("Office", placeholder="e.g., 3.17", key="upcoming_new_office_input_fallback") 
-                new_building = st.selectbox("Building", 
-                                          occupant_manager.get_unique_buildings(),
-                                          key="upcoming_new_building_select_fallback")
+                # Set empty values if not assigning a room
+                new_building = ""
+                new_office = ""
         
         submitted = st.form_submit_button("Add Upcoming Occupant")
         
         if submitted:
+            # Modified validation - only require name
             if new_name:
                 # Create new row
                 new_row = {
@@ -183,4 +203,4 @@ def show_upcoming_occupants(occupant_manager, room_manager):
                 st.success(f"Added {new_name} to upcoming occupants. Remember to save changes!")
                 st.rerun()
             else:
-                st.error("Name is required")
+                st.error("Name is required")  # Changed error message to only require Name

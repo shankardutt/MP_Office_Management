@@ -342,16 +342,55 @@ def show_room_editor(occupant_manager, room_manager):
                     
                     # Process updated rooms
                     for building, office, capacity, is_storage in updated_rooms:
-                        room_manager.set_capacity(building, office, capacity)
-                        
-                        # Update room type if needed
                         room_key = f"{building}:{office}"
                         orig_is_storage = existing_rooms.get(room_key, {}).get('IsStorage', False) if room_key in existing_rooms else False
                         
-                        if orig_is_storage != is_storage:
-                            # Complex update: need to update room and occupants
-                            room_manager.update_room(building, office, building, office, capacity, "Storage" if is_storage else "Regular")
-                    
+                        # Check for floor changes or other property changes
+                        # Find corresponding row in edited_df
+                        edited_row = None
+                        for _, row in edited_df.iterrows():
+                            if pd.isna(row['Building']) or pd.isna(row['Office']):
+                                continue
+                            if str(row['Building']).strip() == building and str(row['Office']).strip() == office:
+                                edited_row = row
+                                break
+                        
+                        if edited_row is not None:
+                            # Get floor from edited row
+                            new_floor = str(edited_row['Floor']).strip() if pd.notna(edited_row['Floor']) else extract_floor(office)
+                            
+                            # If floor was manually changed, we need to update the office number
+                            if new_floor != extract_floor(office):
+                                # Create new office number with updated floor
+                                parts = office.split('.')
+                                if len(parts) > 1:
+                                    new_office = f"{new_floor}.{'.'.join(parts[1:])}"
+                                else:
+                                    new_office = f"{new_floor}.{office}"
+                                
+                                # Update the room using room_manager's update_room method
+                                room_manager.update_room(
+                                    building, office,  # Original building and office
+                                    building, new_office,  # New building and office
+                                    capacity, 
+                                    "Storage" if is_storage else "Regular"
+                                )
+                            else:
+                                # Just update capacity and type if floor wasn't changed
+                                room_manager.set_capacity(building, office, capacity)
+                                
+                                # Update room type if needed
+                                if orig_is_storage != is_storage:
+                                    room_manager.update_room(
+                                        building, office,
+                                        building, office,
+                                        capacity, 
+                                        "Storage" if is_storage else "Regular"
+                                    )
+                        else:
+                            # If row not found (shouldn't happen), just update capacity
+                            room_manager.set_capacity(building, office, capacity)
+                            
                     # Show success message with summary of changes
                     st.success("Room information updated successfully!")
                     
