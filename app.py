@@ -14,26 +14,26 @@ import auth
 from data_manager import load_data, save_data, create_system_manager, get_data_as_excel
 from utils import apply_custom_css, save_action
 
-# Debug message for GitHub imports
-st.sidebar.info("Attempting to import GitHub modules...")
-
-# Import GitHub integration if available
-try:
-    from github_integration import init_github_integration, show_github_settings
-    from github_verification import verify_github_setup
-    GITHUB_AVAILABLE = True
-    st.sidebar.success("GitHub modules loaded successfully!")
-except ImportError as e:
-    GITHUB_AVAILABLE = False
-    st.sidebar.error(f"GitHub modules not available: {str(e)}")
-
-# Set page configuration
+# This MUST be the first Streamlit command
 st.set_page_config(
     page_title=config.PAGE_TITLE,
     page_icon=config.PAGE_ICON,
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Now we can use st.sidebar
+debug_container = st.sidebar.empty()
+
+# Import GitHub integration if available
+try:
+    from github_integration import init_github_integration, show_github_settings
+    from github_verification import verify_github_setup
+    GITHUB_AVAILABLE = True
+    debug_container.success("GitHub modules loaded successfully!")
+except ImportError as e:
+    GITHUB_AVAILABLE = False
+    debug_container.error(f"GitHub modules not available: {str(e)}")
 
 # Hide both the default navigation and the redundant menu items
 st.markdown("""
@@ -145,7 +145,10 @@ with st.sidebar:
                         st.error("Cannot save to GitHub before data is loaded")
         
         # Now attempt to show GitHub settings separately (outside the expander)
-        show_github_settings()
+        try:
+            show_github_settings()
+        except Exception as e:
+            st.error(f"Error showing GitHub settings: {str(e)}")
     
     # File Upload/Selection
     st.header("Data Source")
