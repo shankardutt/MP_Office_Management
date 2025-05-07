@@ -227,25 +227,29 @@ branch = "main"
                 "GitHub Personal Access Token",
                 value=st.session_state.get('github_token', ''),
                 type="password",
-                help="Create a token with 'repo' scope at https://github.com/settings/tokens"
+                help="Create a token with 'repo' scope at https://github.com/settings/tokens",
+                key="github_token_input"
             )
             
             st.session_state.github_owner = st.text_input(
                 "GitHub Username/Organization",
                 value=st.session_state.get('github_owner', ''),
-                help="Your GitHub username or organization name"
+                help="Your GitHub username or organization name",
+                key="github_owner_input"
             )
             
             st.session_state.github_repo = st.text_input(
                 "GitHub Repository Name",
                 value=st.session_state.get('github_repo', ''),
-                help="The name of your GitHub repository"
+                help="The name of your GitHub repository",
+                key="github_repo_input"
             )
             
             st.session_state.github_branch = st.text_input(
                 "Branch Name",
                 value=st.session_state.get('github_branch', 'main'),
-                help="Branch to save to (usually 'main' or 'master')"
+                help="Branch to save to (usually 'main' or 'master')",
+                key="github_branch_input"
             )
             
             # Show instructions for setting up secrets - Avoiding nested expander
@@ -272,8 +276,8 @@ repo = "your_repository_name"
 branch = "main"
             """, language="toml")
         
-        # Test connection button
-        if st.button("Test GitHub Connection"):
+        # Test connection button - Add a unique key
+        if st.button("Test GitHub Connection", key="github_test_connection_btn"):
             # Use secrets if available, otherwise use session state
             token = github_secrets['token'] or st.session_state.github_token
             repo = github_secrets['repo'] or st.session_state.github_repo

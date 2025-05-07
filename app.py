@@ -12,11 +12,12 @@ import io
 import config
 import auth
 from data_manager import load_data, save_data, create_system_manager, get_data_as_excel
-from utils import apply_custom_css
+from utils import apply_custom_css, save_action
 
 # Import GitHub integration if available
 try:
     from github_integration import init_github_integration, show_github_settings
+    from github_verification import verify_github_setup
     GITHUB_AVAILABLE = True
 except ImportError:
     GITHUB_AVAILABLE = False
@@ -74,79 +75,39 @@ if not auth.authenticate():
 auth.show_session_info()
 auth.add_logout_button()
 
-# Add this to your app.py file, in the sidebar section where you handle GitHub integration
-
-# After initializing GitHub integration
-if GITHUB_AVAILABLE:
-    show_github_settings()
-    st.session_state.use_github = st.checkbox(
-        "🔄 Use GitHub for data storage",
-        value=st.session_state.use_github,
-        help="Enable to save and load data from GitHub"
-    )
-    
-    # Add verification option
-    if st.session_state.use_github and st.button("🔍 Verify GitHub Setup"):
-        from github_verification import verify_github_setup
-        
-        with st.spinner("Verifying GitHub setup..."):
-            status, message = verify_github_setup(
-                st.session_state.occupant_manager,
-                st.session_state.room_manager
-            )
-            
-            if status:
-                st.success("✅ GitHub integration verified successfully!")
-                st.info(message)
-            else:
-                st.error(f"❌ GitHub verification failed: {message}")
-
-# After the GitHub verification, add a button to force initial save
-if GITHUB_AVAILABLE and st.session_state.use_github:
-    if st.button("📤 Save Initial Data to GitHub"):
-        with st.spinner("Saving initial data to GitHub..."):
-            # Get current dataframes
-            current_df = st.session_state.occupant_manager.get_current_occupants()
-            upcoming_df = st.session_state.occupant_manager.get_upcoming_occupants()
-            past_df = st.session_state.occupant_manager.get_past_occupants()
-            room_capacities = st.session_state.room_manager.room_capacities
-            
-            # Save data to GitHub
-            from data_manager import save_data
-            success = save_data(
-                current_df,
-                upcoming_df,
-                past_df,
-                st.session_state.file_path,
-                room_capacities,
-                use_github=True
-            )
-            
-            if success:
-                st.success("✅ Initial data saved to GitHub successfully!")
-                # Update last_save timestamp
-                from datetime import datetime
-                st.session_state.last_save = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            else:
-                st.error("❌ Failed to save initial data to GitHub")
 
 # Sidebar - Settings and Filters
 with st.sidebar:
     st.image(config.SIDEBAR_ICON, width=100)
     st.title("Room Allocation System")
     
-    # Show GitHub settings if available
+    # GitHub Integration Settings
     if GITHUB_AVAILABLE:
         show_github_settings()
         st.session_state.use_github = st.checkbox(
             "🔄 Use GitHub for data storage",
             value=st.session_state.use_github,
-            help="Enable to save and load data from GitHub"
+            help="Enable to save and load data from GitHub",
+            key="use_github_checkbox"
         )
+        
+        # Add verification option
+        if st.session_state.use_github and st.button("🔍 Verify GitHub Setup", key="verify_github_btn"):
+            with st.spinner("Verifying GitHub setup..."):
+                status, message = verify_github_setup(
+                    st.session_state.occupant_manager if 'occupant_manager' in st.session_state else None,
+                    st.session_state.room_manager if 'room_manager' in st.session_state else None
+                )
+                
+                if status:
+                    st.success("✅ GitHub integration verified successfully!")
+                    st.info(message)
+                else:
+                    st.error(f"❌ GitHub verification failed: {message}")
     
     # File Upload/Selection
     st.header("Data Source")
-    uploaded_file = st.file_uploader("Upload Excel File", type=['xlsx'])
+    uploaded_file = st.file_uploader("Upload Excel File", type=['xlsx'], key="excel_file_uploader")
     
     if uploaded_file is not None:
         # Save the uploaded file
@@ -168,7 +129,7 @@ with st.sidebar:
     if 'occupant_manager' not in st.session_state or 'room_manager' not in st.session_state:
         occupant_manager, room_manager = create_system_manager(
             st.session_state.file_path, 
-            st.session_state.use_github
+            st.session_state.use_github if GITHUB_AVAILABLE else False
         )
         st.session_state.occupant_manager = occupant_manager
         st.session_state.room_manager = room_manager
@@ -177,34 +138,66 @@ with st.sidebar:
     occupant_manager = st.session_state.occupant_manager
     room_manager = st.session_state.room_manager
     
+    # Initial GitHub Save button if needed
+    if GITHUB_AVAILABLE and st.session_state.use_github:
+        if st.button("📤 Save Initial Data to GitHub", key="save_initial_data_btn"):
+            with st.spinner("Saving initial data to GitHub..."):
+                # Get current dataframes
+                current_df = occupant_manager.get_current_occupants()
+                upcoming_df = occupant_manager.get_upcoming_occupants()
+                past_df = occupant_manager.get_past_occupants()
+                room_capacities = room_manager.room_capacities
+                
+                # Save data to GitHub
+                success = save_data(
+                    current_df,
+                    upcoming_df,
+                    past_df,
+                    st.session_state.file_path,
+                    room_capacities,
+                    use_github=True
+                )
+                
+                if success:
+                    st.success("✅ Initial data saved to GitHub successfully!")
+                    # Update last_save timestamp
+                    st.session_state.last_save = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    st.error("❌ Failed to save initial data to GitHub")
+    
     # Filters
     st.header("Filters")
     buildings = ['All'] + occupant_manager.get_unique_buildings()
-    st.session_state.filter_building = st.selectbox("Building", buildings, key="sidebar_building_filter")
+    st.session_state.filter_building = st.selectbox(
+        "Building", 
+        buildings, 
+        key="sidebar_building_filter"
+    )
     
     # Navigation
     st.header("Navigation")
-    page = st.radio("Go to", [
-        "Dashboard", 
-        "Current Occupants", 
-        "Upcoming Occupants",
-        "Room Management", 
-        "Reports"
-    ], key="main_navigation")
+    page = st.radio(
+        "Go to", 
+        ["Dashboard", "Current Occupants", "Upcoming Occupants", "Room Management", "Reports"],
+        key="main_navigation"
+    )
     
     # Save button with improved data validation
     st.header("Actions")
     if st.button("💾 Save Changes", key="save_changes_btn"):
         # Add ignore warnings checkbox
-        st.session_state.ignore_warnings = st.checkbox("Ignore warnings", value=False, key="ignore_warnings_checkbox")
+        st.session_state.ignore_warnings = st.checkbox(
+            "Ignore warnings", 
+            value=False, 
+            key="ignore_warnings_checkbox"
+        )
         
         # Execute save action
-        from utils import save_action
         success, message = save_action(
             occupant_manager, 
             room_manager, 
             st.session_state.file_path,
-            use_github=st.session_state.use_github
+            use_github=st.session_state.use_github if GITHUB_AVAILABLE else False
         )
         
         if success:

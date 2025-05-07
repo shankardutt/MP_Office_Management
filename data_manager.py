@@ -90,7 +90,7 @@ def verify_github_setup(occupant_manager, room_manager):
     except Exception as e:
         return False, f"Error verifying GitHub setup: {str(e)}"
     
-    
+
 def load_room_capacities(use_github=False):
     """Load room capacities from JSON file or GitHub"""
     try:
