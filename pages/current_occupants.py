@@ -98,7 +98,7 @@ def show_current_occupants(occupant_manager, room_manager):
         for i, (_, occupant) in enumerate(filtered_df.iterrows()):
             col_idx = i % 3
             with delete_cols[col_idx]:
-                occupant_name = occupant['Name']
+                occupant_name = str(occupant['Name'])  # Convert to string to avoid float issues
                 # Skip STORAGE and PLACEHOLDER entries
                 if 'STORAGE' in occupant_name or 'PLACEHOLDER' in occupant_name:
                     continue

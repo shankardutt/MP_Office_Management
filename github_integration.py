@@ -90,6 +90,7 @@ def save_to_github(filename, content, commit_message=None):
         if response.status_code == 200:
             sha = response.json().get("sha")
     except Exception as e:
+        print(f"Error getting file SHA: {str(e)}")
         pass
     
     # Prepare content for API (needs to be base64 encoded)
@@ -123,7 +124,13 @@ def save_to_github(filename, content, commit_message=None):
         if response.status_code in [200, 201]:
             return True, f"Successfully saved {filename} to GitHub"
         else:
-            return False, f"Error saving to GitHub: {response.status_code} - {response.text}"
+            error_detail = f"{response.status_code} - {response.text}"
+            # Check for specific error cases
+            if response.status_code == 403:
+                if "Resource not accessible by personal access token" in response.text:
+                    return False, f"Error: Your GitHub token doesn't have sufficient permissions. Please create a new token with 'repo' scope (full control of repositories)."
+            
+            return False, f"Error saving to GitHub: {error_detail}"
     except Exception as e:
         return False, f"Error connecting to GitHub: {str(e)}"
 
@@ -172,8 +179,10 @@ def load_from_github(filename):
             content = base64.b64decode(content_base64)
             return content
         else:
+            print(f"Error loading from GitHub: {response.status_code} - {response.text}")
             return None
     except Exception as e:
+        print(f"Exception loading from GitHub: {str(e)}")
         return None
 
 def show_github_settings():
@@ -230,6 +239,12 @@ branch = "main"
                 help="Create a token with 'repo' scope at https://github.com/settings/tokens",
                 key="github_token_input"
             )
+            
+            st.info("""
+            **Important:** Your token must have the **repo** scope to allow full repository access.
+            When creating a token, make sure to check the box labeled 'repo' which grants full control
+            of private repositories.
+            """)
             
             st.session_state.github_owner = st.text_input(
                 "GitHub Username/Organization",
@@ -296,8 +311,20 @@ branch = "main"
                     response = requests.get(api_url, headers=headers)
                     
                     if response.status_code == 200:
-                        st.success("GitHub connection successful! Repository exists and token is valid.")
+                        # Test write permissions by trying to create a temporary file
+                        test_content = json.dumps({"test": "This is a test file", "timestamp": str(datetime.now())})
+                        success, message = save_to_github(
+                            "github_test.json",
+                            test_content,
+                            "Test file to verify GitHub write access"
+                        )
+                        
+                        if success:
+                            st.success("✅ GitHub connection successful! Repository exists and token has write permissions.")
+                        else:
+                            st.error(f"❌ Connection successful but write test failed: {message}")
+                            st.info("Please make sure your token has the 'repo' scope (full control of repositories).")
                     else:
-                        st.error(f"Connection failed: {response.status_code} - {response.text}")
+                        st.error(f"❌ Connection failed: {response.status_code} - {response.text}")
                 except Exception as e:
-                    st.error(f"Connection error: {str(e)}")
+                    st.error(f"❌ Connection error: {str(e)}")

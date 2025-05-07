@@ -746,7 +746,6 @@ def show_room_assignment(occupant_manager, room_manager):
                                 (upcoming_df['Office'] == office)
                             ]
                             
-                            # Fix: Similar handling for upcoming occupants
                             for _, occupant in upcoming_occupants.iterrows():
                                 name_str = str(occupant.get('Name', ''))
                                 if "STORAGE" not in name_str and "PLACEHOLDER" not in name_str:
